@@ -1,0 +1,110 @@
+{
+  "model": "qwen38-27b-heretic",
+  "endpoint": "http://127.0.0.1:11434/v1/chat/completions",
+  "no_think": true,
+  "max_tokens": 8192,
+  "temperature": 0.7,
+  "records": [
+    {
+      "brief": "S02-雨夜便利店",
+      "refused": false,
+      "passed": true,
+      "failed_checks": [],
+      "reasons": [],
+      "chars": 1300,
+      "seconds": 8.7
+    },
+    {
+      "brief": "S03-天台静默",
+      "refused": false,
+      "passed": true,
+      "failed_checks": [],
+      "reasons": [],
+      "chars": 1396,
+      "seconds": 7.4
+    },
+    {
+      "brief": "S04-老书店",
+      "refused": false,
+      "passed": true,
+      "failed_checks": [],
+      "reasons": [],
+      "chars": 1973,
+      "seconds": 11.9
+    },
+    {
+      "brief": "S05-地铁站台",
+      "refused": false,
+      "passed": true,
+      "failed_checks": [],
+      "reasons": [],
+      "chars": 2037,
+      "seconds": 13.0
+    },
+    {
+      "brief": "S06-揉面团",
+      "refused": false,
+      "passed": true,
+      "failed_checks": [],
+      "reasons": [],
+      "chars": 1227,
+      "seconds": 7.4
+    },
+    {
+      "brief": "S07-雨夜巷斗",
+      "refused": false,
+      "passed": true,
+      "failed_checks": [],
+      "reasons": [],
+      "chars": 2066,
+      "seconds": 13.0
+    },
+    {
+      "brief": "S08-临终病房",
+      "refused": false,
+      "passed": true,
+      "failed_checks": [],
+      "reasons": [],
+      "chars": 2357,
+      "seconds": 14.6
+    },
+    {
+      "brief": "S09-加油站劫案",
+      "refused": false,
+      "passed": true,
+      "failed_checks": [],
+      "reasons": [],
+      "chars": 2051,
+      "seconds": 11.9
+    },
+    {
+      "brief": "S10-废墟幸存者",
+      "refused": false,
+      "passed": true,
+      "failed_checks": [],
+      "reasons": [],
+      "chars": 1945,
+      "seconds": 11.1
+    },
+    {
+      "brief": "S11-审讯室",
+      "refused": false,
+      "passed": true,
+      "failed_checks": [],
+      "reasons": [],
+      "chars": 1949,
+      "seconds": 12.6
+    }
+  ],
+  "summary": {
+    "总数": 10,
+    "请求失败": 0,
+    "拒答数": 0,
+    "拒答率": 0.0,
+    "一次通过数": 10,
+    "一次通过率": 100.0,
+    "平均字符数": 1830,
+    "拒答清单": [],
+    "格式失败项统计": {}
+  }
+}

@@ -1,0 +1,52 @@
+# ============================================================
+# ai-video-studio —— 入库排除规则
+# 原则：只排除「本机产物」和「体积大的素材」，
+#       文档、脚本、提示词、实验记录一律入库。
+# ============================================================
+
+# --- 编辑器 / 操作系统 ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+
+# --- 运行期临时产物 ---
+*.log
+*.pid
+.tmp/
+*.bak
+*~
+
+# --- 模型权重与生成素材（体积大，用脚本现拉现下，不入库）---
+# 目录占位符 .gitkeep 不受影响（扩展名不匹配）
+assets/**/*.mp4
+assets/**/*.mov
+assets/**/*.mkv
+assets/**/*.avi
+assets/**/*.png
+assets/**/*.jpg
+assets/**/*.jpeg
+assets/**/*.webp
+assets/**/*.wav
+assets/**/*.mp3
+assets/**/*.flac
+assets/**/*.safetensors
+assets/**/*.gguf
+assets/**/*.ckpt
+
+# --- 本地凭据（绝不入库）---
+*.key
+*.pem
+.secret*
+credentials*.json

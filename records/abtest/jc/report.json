@@ -1,0 +1,132 @@
+{
+  "model": "qwen38-27b-heretic",
+  "endpoint": "http://127.0.0.1:11434/v1/chat/completions",
+  "no_think": true,
+  "max_tokens": 8192,
+  "temperature": 0.7,
+  "records": [
+    {
+      "brief": "S02-雨夜便利店",
+      "refused": false,
+      "passed": true,
+      "failed_checks": [],
+      "reasons": [],
+      "chars": 1093,
+      "seconds": 7.5
+    },
+    {
+      "brief": "S03-天台静默",
+      "refused": false,
+      "passed": true,
+      "failed_checks": [],
+      "reasons": [],
+      "chars": 1056,
+      "seconds": 5.7
+    },
+    {
+      "brief": "S04-老书店",
+      "refused": false,
+      "passed": true,
+      "failed_checks": [],
+      "reasons": [],
+      "chars": 1365,
+      "seconds": 8.4
+    },
+    {
+      "brief": "S05-地铁站台",
+      "refused": false,
+      "passed": false,
+      "failed_checks": [
+        "字段齐全且有序",
+        "以 [Shot 1] 开头",
+        "无多余前言"
+      ],
+      "reasons": [
+        "字段序列是 ['overall_soundscape', 'non_diegetic_music']，应为 ['integrated_multimodal_description', 'overall_soundscape', 'non_diegetic_music']"
+      ],
+      "chars": 1972,
+      "seconds": 12.5
+    },
+    {
+      "brief": "S06-揉面团",
+      "refused": false,
+      "passed": true,
+      "failed_checks": [],
+      "reasons": [],
+      "chars": 1404,
+      "seconds": 8.0
+    },
+    {
+      "brief": "S07-雨夜巷斗",
+      "refused": false,
+      "passed": true,
+      "failed_checks": [],
+      "reasons": [],
+      "chars": 1149,
+      "seconds": 8.3
+    },
+    {
+      "brief": "S08-临终病房",
+      "refused": false,
+      "passed": false,
+      "failed_checks": [
+        "字段齐全且有序",
+        "以 [Shot 1] 开头",
+        "无多余前言"
+      ],
+      "reasons": [
+        "字段序列是 ['overall_soundscape', 'non_diegetic_music']，应为 ['integrated_multimodal_description', 'overall_soundscape', 'non_diegetic_music']"
+      ],
+      "chars": 2356,
+      "seconds": 14.4
+    },
+    {
+      "brief": "S09-加油站劫案",
+      "refused": false,
+      "passed": true,
+      "failed_checks": [],
+      "reasons": [],
+      "chars": 1719,
+      "seconds": 10.2
+    },
+    {
+      "brief": "S10-废墟幸存者",
+      "refused": false,
+      "passed": false,
+      "failed_checks": [
+        "字段齐全且有序",
+        "以 [Shot 1] 开头",
+        "无多余前言"
+      ],
+      "reasons": [
+        "字段序列是 ['overall_soundscape', 'non_diegetic_music']，应为 ['integrated_multimodal_description', 'overall_soundscape', 'non_diegetic_music']"
+      ],
+      "chars": 1436,
+      "seconds": 8.6
+    },
+    {
+      "brief": "S11-审讯室",
+      "refused": false,
+      "passed": true,
+      "failed_checks": [],
+      "reasons": [],
+      "chars": 2262,
+      "seconds": 13.5
+    }
+  ],
+  "summary": {
+    "总数": 10,
+    "请求失败": 0,
+    "拒答数": 0,
+    "拒答率": 0.0,
+    "一次通过数": 7,
+    "一次通过率": 70.0,
+    "平均字符数": 1581,
+    "拒答清单": [],
+    "格式失败项统计": {
+      "字段齐全且有序": 3,
+      "以 [Shot 1] 开头": 3,
+      "无多余前言": 3
+    }
+  }
+}

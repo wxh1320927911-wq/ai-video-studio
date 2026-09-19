@@ -1,0 +1,51 @@
+# ============================================================
+# ai-video-studio —— 行尾约定
+# 为什么必须写这个文件：
+#   本机 git 全局配置 core.autocrlf=true（Windows 默认习惯）。
+#   它会在 checkout 时把工作区的 LF 换成 CRLF。
+#   scripts/*.sh 是要 scp 到 Linux 上执行的，一旦带 CR 就会报
+#       bash: $'\r': command not found
+#   所以这里强制文本文件在库里和检出后都是 LF。
+# ============================================================
+
+# 默认：自动识别文本，库内统一 LF
+* text=auto eol=lf
+
+# 脚本与代码：必须 LF（要在 Linux 上跑）
+*.sh    text eol=lf
+*.py    text eol=lf
+
+# 文档与配置：LF 即可（换行符对它们无副作用，统一省事）
+*.md    text eol=lf
+*.txt   text eol=lf
+*.json  text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.toml  text eol=lf
+*.cfg   text eol=lf
+*.ini   text eol=lf
+
+# Windows 批处理：必须 CRLF，否则某些解析器会出问题
+*.cmd   text eol=crlf
+*.bat   text eol=crlf
+
+# 二进制：禁止任何行尾转换与 diff 尝试
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.webp  binary
+*.gif   binary
+*.mp4   binary
+*.mov   binary
+*.mkv   binary
+*.wav   binary
+*.mp3   binary
+*.flac  binary
+*.gguf  binary
+*.safetensors binary
+*.ckpt  binary
+*.zip   binary
+*.7z    binary
+
+# 实验记录里的 JSON 报告：diff 时别整行重排
+records/abtest/**/report.json -diff
