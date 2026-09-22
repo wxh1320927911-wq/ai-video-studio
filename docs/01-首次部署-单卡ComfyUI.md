@@ -483,6 +483,12 @@ T2V 和 I2V 用了 Subgraph 功能，ComfyUI 版本太老会加载不出来。�
 **生成慢得离谱（比参考值慢 3 倍）**
 最常见的原因是 **cu128 + `int8_convrot` 权重**。int8 推理内核在 cu128 下会静默失效——不报错，只是慢。见 2.4，改成 `fp8_scaled` 版本。次常见原因是内存不足 32GB。
 
+**但也要接受一个事实：慢有一部分是结构性的，改配置解决不了。** 官方 README 原文：
+
+> The initial open-source release provides inference with **full attention only**. Our sparse-attention implementation will be released in a future update.
+
+H3 原生支持稀疏注意力，**但首次开源版只放了全注意力**。官方把最有效的那个提速手段留着没发。这意味着两件事：一是本地推理慢有一部分不是你的问题；二是**将来官方放出来时会有一次免费提速**，不用换卡。这也是社区都在自己做加速（lightX2V、二采、蒸馏）的背景。
+
 **显存不够（OOM）**
 按这个顺序试：先把时长从 5 秒缩到最短 → 再降 Megapixels → 装 Kijai 的 KJNodes，用 `MiniMax H3 Low VRAM Attention` 和 `MiniMax H3 Chunk FeedForward` 两个节点降峰值显存。降量化是最后手段，那会掉画质。
 

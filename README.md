@@ -31,13 +31,19 @@
 | --- | --- |
 | 架构 | 33B 稠密单流 Omni Transformer（其中约 13B 在 AdaLN 分支，剪枝版可去掉）+ Qwen3-VL-32B 作编码器 |
 | 开源范围 | 仅 H3-Base（768p 生成）；Context-IR、Regenerate-2K 未开源 |
-| 变体 | `fl2va`（文生 / 首帧 / 尾帧 / 首尾帧）、`ref2va`（图像·视频·音频参考）。**两套权重不通用** |
+| 开源的两个 checkpoint | **FL2VA**（文生 / 首帧 / 尾帧 / 首尾帧）和 **Ref2VA**（图像·视频·音频参考）。**两套权重不通用** |
+| **稀疏注意力未开源** | H3 原生支持稀疏注意力训练与推理，但官方 README 原文：*"The initial open-source release provides inference with **full attention only**. Our sparse-attention implementation will be released in a future update."* —— **首次开源版只有全注意力**，这是本地推理慢的一个结构性原因，也意味着将来官方放出来会有一次免费提速 |
+| 官方推荐的服务框架 | SGLang、vLLM、diffusers、**ComfyUI** —— ComfyUI 是官方认可的路线之一，不是社区野路子 |
 | 输出分辨率 | 短边 768px；16:9 即 1344×768。分辨率取整到 32 的倍数 |
 | 输出时长 | 4–15 秒，帧数对齐 17k+5 网格（24fps 下即 5、22、39、56… 帧） |
 | 音频 | 每次生成自带 32kHz 立体声，与画面同一次前向产出，不需要后期配音 |
 | 对白语言 | 稳定支持 11 种，含中文、英语、日语、韩语 |
 | 提示词上限 | 7000 字符；请求体 ≤ 64MB |
 | 许可 | MiniMax H3 Community License。**本地生成结果商用需通过 Comfy 购买商用许可** |
+
+> **一句话：本地能跑的，全都是 H3-Base。** 这不是巧合，是逻辑必然——H3 系统三个模块里只有 H3-Base 开源了权重。
+> 所以任何 ComfyUI 应用、任何社区镜像、任何本地部署，跑的都是 H3-Base 的 FL2VA 或 Ref2VA，**上限就是 768p**。
+> 但要区分「同一份权重的不同包装」和「换了一份权重」：剪枝量化版（Comfy-Org 打包的 21GB）是前者；蒸馏版（如 FastVideo 的 FastH3 8 步检查点）是后者，严格说已经不是原版 H3-Base 了；turbo LoRA 则只是挂在基座上的小补丁，基座没变。
 
 ---
 
