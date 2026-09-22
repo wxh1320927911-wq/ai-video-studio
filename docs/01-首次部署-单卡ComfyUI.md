@@ -7,6 +7,15 @@
 
 这一份是「首次部署」，做一次就够。以后每次创作看 `02-每次创作流程.md`。
 
+> **2026-09-22 核对记录（本文写完之后做的）**
+> 本文最初是照官方文档写的，**从未真正执行过**。09-22 逐条对官方原件核对了一遍，改了四处：
+> ① 扩散模型量化版本改为**按 CUDA 版本自动选**（官方明确 int8 需要 cu130），原写法会让人在 cu128 上误用 int8、慢 3 倍还不报错；
+> ② 下载模型改为**走 hf-mirror 镜像站 + 关 Xet**，原写法让人开学术加速，而代理白名单里没有镜像站，实测会变慢甚至失败；
+> ③ 补上 **10 个风格 embeddings**（合计 10.7 MB，原文档完全没提）；
+> ④ 参数表按**实际工作流 JSON** 逐个核对，删掉了并不存在的 `steps` 控件。
+> 核对来源：`Comfy-Org/MiniMax-H3` 仓库 README 与文件树、`Comfy-Org/workflow_templates` 的模板索引与三份工作流 JSON（原件已存进 `workflows/`）。
+> **仍未验证的是「真的能跑出片子」**——那要等实例开机。核对过文档不等于跑通，这条别混。
+
 ---
 
 ## 第 0 步 · 先想清楚要生成什么
@@ -68,14 +77,26 @@ AutoDL 的内存是**按 GPU 数量成倍分配**的（例如主机规则写 `32
 
 无论哪条，注意两点：
 
-1. **ComfyUI 版本必须 ≥ 0.30.0**，低版本没有 MiniMax H3 的原生节点。
-2. 社区有报告称 **cu128 的 PyTorch 会让 int8 推理内核静默失效，速度慢 3 倍**，换 cu13x 后恢复正常。能选 cu13x 的镜像就优先选；只有 cu128 的话也先跑通，之后再对照排查。
+1. **ComfyUI 版本必须 ≥ 0.30.0**，低版本没有 MiniMax H3 的原生节点。这个数字来自官方模板索引里的 `minComfyUIVersion` 字段（T2V / I2V / R2V 三个模板都是 0.30.0），不是我推测的。
+2. **CUDA 版本决定下哪个量化版本，必须先确认。** 官方模型仓库 README 原文：
+
+   > For diffusion models prefer `int8_convrot` if you are able to use pytorch with **cu130**. `fp8_scaled` should only be used if you cannot use `int8_convrot`.
+
+   即 **int8 量化需要 cu130**。社区另有报告称 cu128 下 int8 推理内核会**静默失效、慢约 3 倍**——不报错，只是慢，最容易被误判成「H3 就是慢」。
+
+   两个文件体积几乎一样（20.97 GB vs 20.96 GB），换掉零成本。开机后先跑一句确认：
+
+   ```bash
+   python -c "import torch;print(torch.version.cuda)"
+   ```
+
+   输出 `13.x` → 用 `int8_convrot`；否则 → 用 `fp8_scaled`。第 4 步的下载脚本会**自动判断**，不用手选。
 
 ### 2.5 数据盘
 
 默认 50GB。**建议扩容到 100GB。**
 
-模型文件合计约 42GB（见第 4 步），加上 ComfyUI、依赖和生成结果，50GB 会非常紧张。
+模型文件合计约 44.4GB（见第 4 步），加上 ComfyUI、依赖和生成结果，50GB 会非常紧张。
 
 > ⚠️ 付费扩容的数据盘**无论实例是否开机，每天都会计费**。用完记得缩容或释放实例，否则会一直扣。
 
@@ -108,7 +129,7 @@ python -c "import torch;print('torch',torch.__version__,'cuda',torch.version.cud
 | --- | --- | --- |
 | 显存 | 24GB 可用 | 换卡型 |
 | 内存（free 的 total） | **≥32GB** | 换主机，别硬跑 |
-| 数据盘可用空间 | ≥50GB | 扩容数据盘 |
+| 数据盘可用空间 | ≥55GB | 扩容数据盘 |
 
 顺带把 Python 依赖拉齐：
 
@@ -118,15 +139,18 @@ pip install -U "huggingface_hub[cli]"
 
 ---
 
-## 第 4 步 · 下载模型（约 42GB）
+## 第 4 步 · 下载模型（约 44 GB）
 
-H3 的模型在 Hugging Face 的 `Comfy-Org/MiniMax-H3` 仓库。国内直连很慢，**先开 AutoDL 的学术加速**：
+H3 的模型在 Hugging Face 的 `Comfy-Org/MiniMax-H3` 仓库，共 33 个文件，我们只要其中 6–7 个。
+
+**不要开学术加速**，改成设两个环境变量走镜像站——理由见 4.3：
 
 ```bash
-source /etc/network_turbo
+export HF_ENDPOINT=https://hf-mirror.com
+export HF_HUB_DISABLE_XET=1
 ```
 
-然后跑 `scripts/download-models.sh`（内容见下，也可以直接照抄命令）。
+然后跑 `scripts/download-models.sh`。
 
 ### 4.1 确定 ComfyUI 的路径
 
@@ -138,7 +162,7 @@ ls -d /root/autodl-tmp/ComfyUI /root/ComfyUI /root/comfyui 2>/dev/null
 
 假设结果是 `/root/autodl-tmp/ComfyUI`，把它记下来，后面都用这个路径（脚本里叫 `COMFY_DIR`）。
 
-> **如果 ComfyUI 装在系统盘（`/root/ComfyUI`）**：系统盘只有 30GB，装不下 42GB 模型。把 models 目录软链到数据盘：
+> **如果 ComfyUI 装在系统盘（`/root/ComfyUI`）**：系统盘只有 30GB，装不下 44GB 模型。把 models 目录软链到数据盘：
 > ```bash
 > mkdir -p /root/autodl-tmp/ComfyUI-models
 > rm -rf /root/ComfyUI/models && ln -s /root/autodl-tmp/ComfyUI-models /root/ComfyUI/models
@@ -147,53 +171,58 @@ ls -d /root/autodl-tmp/ComfyUI /root/ComfyUI /root/comfyui 2>/dev/null
 
 ### 4.2 要下的文件（第一阶段最小集合）
 
+尺寸按官方仓库实测（十进制 GB），**已逐个核对文件确实存在**。
+
 | 用途 | 文件 | 大小 |
 | --- | --- | --- |
-| 扩散模型（文生 / 首帧尾帧） | `diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors` | 20.97 GB |
+| 扩散模型（文生 / 首帧尾帧） | `diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors`<br>或 `…_pruned_fp8_scaled.safetensors`（**按 CUDA 版本二选一**，见 2.4） | 20.97 / 20.96 GB |
 | 文本编码器 | `text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors` | 15.69 GB |
 | 视频 VAE | `vae/minimax_h3_video_vae_fp16.safetensors` | 5.21 GB |
 | 音频 VAE | `vae/minimax_h3_audio_vae_fp32.safetensors` | 0.61 GB |
 | Turbo LoRA（8 步，提速用） | `loras/minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors` | 1.96 GB |
+| 风格 embeddings（10 个，**白给**） | `embeddings/minimaxh3_*.safetensors` | 0.01 GB |
 | **合计** | | **约 44.4 GB** |
 
-省空间的做法：视频 VAE 可以用 int8 版（`minimax_h3_video_vae_int8_convrot.safetensors`，2.81GB）替掉 fp16 版，省 2.4GB。
+**可选增补：**
+
+- **4 步 Turbo LoRA**：`loras/minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors`（1.96 GB）。比 8 步版更快，768p 专用。想试就下，不想试跳过。
+- **省空间**：视频 VAE 可用 int8 版（`minimax_h3_video_vae_int8_convrot.safetensors`，2.81 GB）替掉 fp16 版，省 2.4 GB。
+
+> **关于那 10 个 embeddings**：合计只有 **10.7 MB**，是 10 个风格/运镜预设（子弹时间、暗黑魔法、四季变换等），在提示词里写 `embedding:minimaxh3_bullet_time` 就能调用。体积可以忽略，没有不下的理由。
+> 需要 ComfyUI 支持 PR #15697，比 H3 本体（#15224）更晚，版本太老会不生效——但不生效也只是被当成普通文本忽略，不会报错。
 
 **第一阶段先不要下的：**
 
 - `ref2va` 系列（参考生视频），以后再下，避免数据盘翻倍。
-- `bf16` 原版（66GB）和 `int8` 未剪枝版（34GB），消费级卡跑不动，别浪费下载时间。
+- `bf16` 原版（66 GB）和 `int8` 未剪枝版（34 GB），消费级卡跑不动，别浪费下载时间。
+- `model_patches/`（ControlNet Union），第一阶段用不上。
+
 
 ### 4.3 下载命令
 
+**用仓库里的脚本，不要手敲命令**——它会自动判断该下 int8 还是 fp8、并把 10 个 embeddings 一起带上：
+
 ```bash
-source /etc/network_turbo
-cd /root/autodl-tmp
-
-COMFY_DIR=/root/autodl-tmp/ComfyUI          # 换成你自己的路径
-mkdir -p "$COMFY_DIR/models/diffusion_models" \
-         "$COMFY_DIR/models/text_encoders" \
-         "$COMFY_DIR/models/vae" \
-         "$COMFY_DIR/models/loras"
-
-hf download Comfy-Org/MiniMax-H3 \
-  --include "diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors" \
-            "text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors" \
-            "vae/minimax_h3_video_vae_fp16.safetensors" \
-            "vae/minimax_h3_audio_vae_fp32.safetensors" \
-            "loras/minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors" \
-  --local-dir /root/autodl-tmp/h3-dl
-
-# 把文件搬到 ComfyUI 对应目录
-cp /root/autodl-tmp/h3-dl/diffusion_models/*.safetensors "$COMFY_DIR/models/diffusion_models/"
-cp /root/autodl-tmp/h3-dl/text_encoders/*.safetensors   "$COMFY_DIR/models/text_encoders/"
-cp /root/autodl-tmp/h3-dl/vae/*.safetensors             "$COMFY_DIR/models/vae/"
-cp /root/autodl-tmp/h3-dl/loras/*.safetensors           "$COMFY_DIR/models/loras/"
-rm -rf /root/autodl-tmp/h3-dl
+cd /root/planner          # 或者你把 scripts/ 传上来的目录
+COMFY_DIR=/root/autodl-tmp/ComfyUI bash scripts/download-models.sh
 ```
+
+可选开关：`EXTRA_LORA=1` 加下 4 步 LoRA；`DIFF_MODEL=int8|fp8` 强制指定量化版本。
+
+#### 两个必须先设的环境变量（都是踩过的坑）
+
+```bash
+export HF_ENDPOINT=https://hf-mirror.com   # 走镜像站，国内直连 huggingface.co 会超时
+export HF_HUB_DISABLE_XET=1                # 关掉 Xet 传输
+```
+
+- **`HF_HUB_DISABLE_XET=1` 是必须的。** `hf download` 新版默认走 Xet 协议，会**绕开镜像站直连 `us.aws.cdn.hf.co`**，国内必报 `CAS Client Error`。关掉后才会老老实实走 `HF_ENDPOINT`。
+- **不要为了下载模型去 `source /etc/network_turbo`。** AutoDL 的学术加速代理白名单里**没有 hf-mirror.com**，开了反而会把镜像站流量也塞进代理，更慢甚至失败。实测直连镜像站有 **16 MB/s**，41 GB 约 40 分钟。
+  - 学术加速只在 `git clone` GitHub 仓库时开。
 
 `hf download` 支持断点续传，网络断了重跑同一条命令即可，不会从头再来。
 
-**下载过程中可以随时另开一个终端看进度：**
+**下载过程中随时另开一个终端看进度：**
 
 ```bash
 du -sh /root/autodl-tmp/h3-dl
@@ -201,7 +230,7 @@ du -sh /root/autodl-tmp/h3-dl
 
 ### 4.4 关于无卡模式（可选省钱手段）
 
-下载 42GB 不需要 GPU。AutoDL 提供**无卡模式开机**：配置为 0.5 核 / 2GB 内存 / 无 GPU，统一 **¥0.1/小时**。
+下载 44GB 不需要 GPU。AutoDL 提供**无卡模式开机**：配置为 0.5 核 / 2GB 内存 / 无 GPU，统一 **¥0.1/小时**。
 
 流程是：正常开机建好实例 → 关机 → 无卡模式开机 → 下载模型 → 关机 → 正常开机。
 
@@ -237,27 +266,58 @@ ss -tlnp | grep 6006                        # 确认端口在监听
 
 ## 第 6 步 · 跑出第一个片段
 
-### 6.1 加载模板
+### 6.1 加载工作流
 
-界面顶部菜单「**工作流**」→「**浏览模板**」→ **视频** 分类 → 选 **MiniMax H3 T2V** → 加载。
+**推荐：直接把仓库里的 JSON 拖到 ComfyUI 画布上。** 文件在 `workflows/`：
 
-加载后如果弹出「缺少模型」的提示，**不用点自动下载**——我们已经手动下好了。确认文件名和节点里要求的完全一致即可（模板要求的就是第 4.2 节那几个文件名）。
+| 文件 | 官方标题 | 用途 |
+| --- | --- | --- |
+| `workflows/video_minimax_h3_t2v.json` | MiniMax H3: Text to Video | **第一次跑通就用这个**，不需要任何输入文件 |
+| `workflows/video_minimax_h3_i2v.json` | MiniMax H3: Image to Video | 给一张首帧图 |
+| `workflows/video_minimax_h3_r2v.json` | MiniMax H3: Reference to Video | 参考图/视频/音频（要 ref2va 权重，第一阶段没下） |
+
+这三个文件是从官方模板库原样下载的，加载效果和界面里「浏览模板」找出来的一样，但不用翻菜单，而且配置可复现。
+
+**也可以走界面**：菜单「工作流」→「浏览模板」→ 视频 分类 → 找 `MiniMax H3: Text to Video`。
+
+> ⚠️ **T2V / I2V 用了 Subgraph（子图）功能**，加载后看到的是一个打包好的节点，双击可以展开。子图是较新的界面特性，**加载报错或节点显示空白 = ComfyUI 版本太老**，先升级再说。
+
+加载后如果弹出「缺少模型」的提示，**不用点自动下载**——我们已经手动下好了。节点里写死的文件名和第 4.2 节那张表**逐个核对过，完全一致**。
 
 ### 6.2 参数设置（第一次先求快）
 
-| 节点 | 参数 | 第一次建议值 |
+参数都在那个子图节点上（双击展开能看到内部，但不用展开）。**参数名以这里为准**——网上教程里的名字和实际工作流对不上：
+
+| 位置 | 参数名 | 第一次建议值 |
 | --- | --- | --- |
-| Resolution Selector | Aspect ratio | `16:9 (Widescreen)` |
-| Resolution Selector | Megapixels | **`0.4`**（先小后大，0.98 才是 1344×768 满画布） |
-| Resolution Selector | Multiple | `32`（不要改，这是 H3 的分辨率网格） |
-| MiniMax H3 | 时长 / length | **5 秒**（会自动对齐到 17k+5 帧网格） |
-| MiniMax H3 | steps | 默认 20 |
-| MiniMax H3 | **turbo_mode** | **打开**，`turbo_steps` = 8 |
-| Prompt | 提示词 | 粘 `prompts/第一条测试提示词.md` 的内容 |
+| 顶层 `Resolution Selector` | Aspect ratio | `16:9 (Widescreen)`（默认值） |
+| 顶层 `Resolution Selector` | Megapixels | **`0.4`**（默认值，输出 864×480；0.98 才是 1344×768 满画布） |
+| 顶层 `Resolution Selector` | Multiple | `32`（不要改，这是 H3 的分辨率网格） |
+| 子图节点 | `prompt` | 粘 `prompts/第一条测试提示词.md` 的内容 |
+| 子图节点 | `duration` | **`5`**（**单位是秒**，不是帧数。内部会自动对齐到 17k+5 帧网格） |
+| 子图节点 | **`turbo_mode`** | **改成 `true`**（默认 `false`） |
+| 子图节点 | `turbo_steps` | `8`（默认值，只在 turbo_mode 打开时生效） |
+| 子图节点 | `turbo_model_strength` | `1`（默认值） |
+| 子图节点 | `noise_seed` | 不用改。默认是固定种子，方便复现 |
+
+**没有 `steps` 这个控件，别找。** 步数由 `turbo_mode` 内部切换：关 → 内部固定 20 步；开 → 用 `turbo_steps`（8 步）。官方工作流就是这么设计的。
 
 turbo 模式用 8 步代替 20 步，速度大约快一倍多，代价是音频和动作质量略降。第一次跑通就开它。
 
-### 6.3 排队生成
+### 6.3 可选：用风格 embeddings
+
+那 10 个 10.7 MB 的 embeddings 是**写进提示词**里用的，不是加节点。在 `prompt` 正文里写：
+
+```
+embedding:minimaxh3_bullet_time
+```
+
+可用的名字：`art_is_explosion` / `blooming_flowers` / `bullet_time` / `dark_magic` / `fire_breath` / `four_seasons` / `kiss_camera` / `spiral_ascent` / `storm_magic` / `truman_show`。
+
+第一次跑通**先别加**，多一个变量就多一个出错源。跑通之后再加。
+
+
+### 6.4 排队生成
 
 点「Queue Prompt」。控制台会显示进度条和每一步的耗时。
 
@@ -266,11 +326,11 @@ turbo 模式用 8 步代替 20 步，速度大约快一倍多，代价是音频�
 5 秒片段在 4090 + turbo 下，参考耗时 **5–10 分钟**。如果超过 20 分钟，按下面的顺序查：
 
 1. 内存是不是只有 16GB（`free -g`）→ 这是最常见的原因
-2. turbo_mode 有没有真的打开
-3. `nvidia-smi` 看显存占用，如果只有几 GB，说明 offload 在疯狂搬数据
-4. CUDA 是不是 cu128
+2. `turbo_mode` 有没有真的打开（子图节点上，默认是 `false`）
+3. **CUDA 是不是 cu128 却下了 `int8_convrot` 权重** → int8 内核在 cu128 下会静默失效、慢约 3 倍，不报错。见 2.4，换成 `fp8_scaled` 版本
+4. `nvidia-smi` 看显存占用，如果只有几 GB，说明 offload 在疯狂搬数据
 
-### 6.4 可选提速：Sage Attention
+### 6.5 可选提速：Sage Attention
 
 生成速度能再快大约一倍，质量损失很小。想装的话：
 
@@ -284,11 +344,17 @@ turbo 模式用 8 步代替 20 步，速度大约快一倍多，代价是音频�
 
 ## 第 7 步 · 把结果拿回本地
 
-生成完的视频在 ComfyUI 的 `output/` 目录下，是一个 mp4（画面 + 立体声在同一条轨道里，不用另外合成音频）。
+生成完的视频在 ComfyUI 的 `output/` 目录下（T2V 默认存到 `output/video/MiniMax_H3/`），是一个 mp4（画面 + 立体声在同一条轨道里，不用另外合成音频）。
 
 一个 5 秒 768p 的 mp4 大约 5–15MB，**最简单的办法是 JupyterLab**：左侧文件树进到 `output/`，右键文件 → Download。
 
-文件大的话用公网网盘（AutoDL 快捷工具里的 **AutoPanel**），授权阿里云盘或夸克网盘后，实例 → 网盘 → 本地两跳。或者用 FileZilla / `scp`。
+> ⚠️ **JupyterLab 不一定打得开。** 上一轮租的规划机实例就是 `jupyter_port=0`、8443 端口 `ERR_CONNECTION_CLOSED`，完全用不了。别把它当唯一出路，先点一下试试，不行立刻换下面的办法。
+
+文件大的话用公网网盘（AutoDL 快捷工具里的 **AutoPanel**），授权阿里云盘或夸克网盘后，实例 → 网盘 → 本地两跳。或者用 FileZilla / `scp`：
+
+```bash
+scp -P <端口> root@<SSH地址>:/root/autodl-tmp/ComfyUI/output/video/MiniMax_H3/*.mp4 ./
+```
 
 把下载下来的片段放进本地的 `records/` 或你自己的工作目录。
 
@@ -300,7 +366,30 @@ turbo 模式用 8 步代替 20 步，速度大约快一倍多，代价是音频�
 2. **记账。** 在 `records/` 里新建一行，写下：日期、卡型、开机时长、生成条数、花费。这张表是判断「自建到底值不值」的唯一依据。
 3. **决定数据盘。** 如果短期内不继续做，考虑「缩容数据盘」或「释放实例」。付费扩容部分每天都会计费，不管开不开机。
 
-> 数据盘里的 42GB 模型关机后不会丢，下次开机可以直接用。**但保存镜像不会备份数据盘**，所以别指望靠镜像保住模型。
+> 数据盘里的 44GB 模型关机后不会丢，下次开机可以直接用。**但保存镜像不会备份数据盘**，所以别指望靠镜像保住模型。
+
+---
+
+## 附 · 还有哪些 H3 工作流（现在不用，知道有就行）
+
+官方模板库里的 H3 系工作流共 8 个。上面只用了 T2V，其余留作以后按需取。最低版本号取自官方模板索引的 `minComfyUIVersion` 字段。
+
+| 模板名 | 标题 | 最低 ComfyUI | 用途 |
+| --- | --- | --- | --- |
+| `video_minimax_h3_t2v` | Text to Video | 0.30.0 | **本教程用这个** |
+| `video_minimax_h3_i2v` | Image to Video | 0.30.0 | 给一张首帧图 |
+| `video_minimax_h3_r2v` | Reference to Video | 0.30.0 | 参考图/视频/音频（需 ref2va 权重） |
+| `video_minimax_h3_i2v_continuation` | Image to Video | 0.30.0 | 首帧 + 空提示词续写 |
+| `video_minimax_h3_multiframe_reference` | Multiframe Reference | 0.34.0 | **最多 4 张参考帧锚定在时间轴任意位置**，做续接、卡叙事节点 |
+| `video_minimax_h3_fun_controlnet_union` | Fun ControlNet Union | 0.35.0 | 用参考视频做姿态控制（需下 `model_patches/`） |
+| `video_fastvideo_fasth3_t2v` / `_i2v` | FastVideo FastH3 | **0.36.0** | 独立的 8 步蒸馏检查点，**不是 LoRA**，专为速度另做的权重，2026-09-15 发布 |
+
+两个值得记的点：
+
+- **FastH3 是另一套权重，不在 `Comfy-Org/MiniMax-H3` 仓库里。** 想要得去 FastVideo 那边找。它比「标准模型 + turbo LoRA」更彻底，但换权重意味着重新下载几十 GB，第一阶段不做。
+- **`multiframe_reference` 是这堆里对「做片子」最有用的一个**——能把 4 张关键帧钉在时间轴指定位置，等于把分镜控制权拿回来一部分。等第一阶段跑通、确定要继续做长片，这个优先试。
+
+本地已有 T2V / I2V / R2V 三份原件（`workflows/`），其余需要时从模板库取，取法见 `workflows/README.md`。
 
 ---
 
@@ -310,7 +399,13 @@ turbo 模式用 8 步代替 20 步，速度大约快一倍多，代价是音频�
 检查 `models/vae/minimax_h3_audio_vae_fp32.safetensors` 是否下好了，以及提示词里有没有描述音频内容（对白、音效、音乐）。H3 是画面和声音同一次前向生成的，音频描述为空就真的没声音。
 
 **提示缺少模型 / 文件名不匹配**
-模板节点里写死的文件名必须完全一致。对照第 4.2 节的表格逐个核对，注意 `fl2va` 和 `ref2va` 是两套权重，别放错。
+节点里写死的文件名必须完全一致。对照第 4.2 节的表格逐个核对，注意 `fl2va` 和 `ref2va` 是两套权重，别放错。
+
+**工作流加载后节点是空白 / 报错说看不懂节点类型**
+T2V 和 I2V 用了 Subgraph 功能，ComfyUI 版本太老会加载不出来。升级 ComfyUI 到 0.30.0 以上（embeddings 还要更晚的版本才支持）。
+
+**生成慢得离谱（比参考值慢 3 倍）**
+最常见的原因是 **cu128 + `int8_convrot` 权重**。int8 推理内核在 cu128 下会静默失效——不报错，只是慢。见 2.4，改成 `fp8_scaled` 版本。次常见原因是内存不足 32GB。
 
 **显存不够（OOM）**
 按这个顺序试：先把时长从 5 秒缩到最短 → 再降 Megapixels → 装 Kijai 的 KJNodes，用 `MiniMax H3 Low VRAM Attention` 和 `MiniMax H3 Chunk FeedForward` 两个节点降峰值显存。降量化是最后手段，那会掉画质。
